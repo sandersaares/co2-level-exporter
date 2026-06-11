@@ -1,4 +1,6 @@
-﻿using Microsoft.Win32.SafeHandles;
+﻿#nullable disable
+
+using Microsoft.Win32.SafeHandles;
 using System;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -36,7 +38,6 @@ namespace co2_level_exporter
         public float ADCValue;
         private int ADC;
         private int signbit = 131072;
-        private float ADCValueTmp;
         public USBM.MyDeviceInfo InfoDevice;
         private Guid InterfaceClassGuid = new Guid(1293833650U, (ushort)61807, (ushort)4559, (byte)136, (byte)203, (byte)0, (byte)17, (byte)17, (byte)0, (byte)0, (byte)48);
 
@@ -320,7 +321,7 @@ namespace co2_level_exporter
                     myDeviceInfo.UnitVersion = (int)INBuffer[6];
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
             }
             return myDeviceInfo;
@@ -377,15 +378,6 @@ namespace co2_level_exporter
             internal Guid ClassGuid;
             internal uint DevInst;
             internal IntPtr Reserved;
-        }
-
-        internal struct DEV_BROADCAST_DEVICEINTERFACE
-        {
-            internal uint dbcc_size;
-            internal uint dbcc_devicetype;
-            internal uint dbcc_reserved;
-            internal Guid dbcc_classguid;
-            internal char[] dbcc_name;
         }
 
         public struct MyDeviceInfo

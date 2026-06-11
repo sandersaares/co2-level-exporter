@@ -1,7 +1,5 @@
 ﻿using Prometheus;
-using System;
 using System.Diagnostics;
-using System.Threading;
 
 namespace co2_level_exporter
 {

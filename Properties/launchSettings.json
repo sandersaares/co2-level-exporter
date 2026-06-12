@@ -1,14 +1,8 @@
 {
   "$schema": "http://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "co2_level_exporter": {
-      "commandName": "Project",
-      "launchBrowser": true,
-      "launchUrl": "metrics",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development"
-      },
-      "applicationUrl": "http://localhost:2295"
+    "co2-level-exporter": {
+      "commandName": "Project"
     }
   }
 }

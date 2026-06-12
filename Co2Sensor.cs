@@ -1,65 +1,47 @@
-﻿using Prometheus;
-using System.Diagnostics;
-
 namespace co2_level_exporter
 {
     /// <summary>
-    /// Connects to the input where the CO2 sensor is connected and reports the data receievd.
+    /// Reads CO2 measurements from the USB sensor device.
     /// </summary>
-    public static class Co2Sensor
+    public sealed class Co2Sensor
     {
+        // Experimentally determined conversion factor; the response looks linear.
+        private const float PpmPerVolt = 197.5f;
+
+        private readonly USBM _device = new();
+        private bool _isOpen;
+
         /// <summary>
-        /// Entry point - starts observing the sensor and keeps doing it forever.
+        /// Opens the sensor device. Throws if the device cannot be opened.
         /// </summary>
-        public static void StartObserving()
+        public void Open()
         {
-            new Thread((ThreadStart)ObserverThread)
-            {
-                IsBackground = true,
-                Name = "Sensor observer thread"
-            }.Start();
+            if (!_device.OpenDevice())
+                throw new Exception("Could not open the CO2 sensor device.");
+
+            _isOpen = true;
         }
 
-        private static void ObserverThread()
+        /// <summary>
+        /// Reads the current measurement. Throws if the device is not open or returns a zero
+        /// value, which indicates the device may not be working.
+        /// </summary>
+        public Co2Reading Read()
         {
-            try
-            {
-                var device = new USBM();
+            if (!_isOpen)
+                throw new InvalidOperationException("The sensor device has not been opened.");
 
-                if (!device.OpenDevice())
-                    throw new Exception("Could not open device.");
+            var volts = _device.GetMeasuredValue();
+            if (volts == 0.0f)
+                throw new Exception("Value read from device was zero. This indicates the device may not be working.");
 
-                while (true)
-                {
-                    var volts = device.GetMeasuredValue();
-
-                    if (volts == 0.0f)
-                        throw new Exception("Value read from device was zero. This indicates the device may not be working. Restarting to try to recover.");
-
-                    var ppmPerVolt = 197.5f; // Experimentally determined - looks perfectly linear.
-                    var ppm = (int)(volts * ppmPerVolt);
-
-                    Measurements.Inc();
-                    Volts.Set(volts);
-                    Ppm.Set(ppm);
-
-                    Console.WriteLine($"{volts:#00.000} V\t\t{ppm} PPM");
-
-                    Thread.Sleep(TimeSpan.FromSeconds(1));
-                }
-            }
-            catch (Exception ex)
-            {
-                // Oh no! This is fatal error.
-                Console.WriteLine(ex.ToString());
-                Console.WriteLine("Will restart after sleeping for a while.");
-                Thread.Sleep(TimeSpan.FromSeconds(30));
-                Process.GetCurrentProcess().Kill();
-            }
+            var ppm = (int)(volts * PpmPerVolt);
+            return new Co2Reading(DateTime.UtcNow, volts, ppm);
         }
-
-        private static readonly Gauge Volts = Metrics.CreateGauge("co2_sensor_reading_volts", "Voltage level of the CO2 sensor.");
-        private static readonly Gauge Ppm = Metrics.CreateGauge("co2_sensor_reading_ppm", "PPM level of the CO2 sensor (converted from voltage).");
-        private static readonly Counter Measurements = Metrics.CreateCounter("co_sensor_measurements_total", "Count of measurements.");
     }
+
+    /// <summary>
+    /// A single CO2 sensor measurement.
+    /// </summary>
+    public readonly record struct Co2Reading(DateTime Timestamp, float Volts, int Ppm);
 }

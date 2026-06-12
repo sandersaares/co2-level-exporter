@@ -59,6 +59,5 @@ See [development.md](development.md) for prerequisites and the build/run workflo
 
 Run the app under a supervisor that restarts it on exit (it exits on device fault by design),
 e.g. a Windows Scheduled Task set to "run whether user is logged on or not" and "restart on
-failure", or a service wrapper. The sensor PC's public IP must be allowed through the SQL
-firewall; if it is dynamic, schedule `home-env/infra/datastore/set-firewall-rule.ps1
--UseMyPublicIp`.
+failure", or a service wrapper. The SQL server accepts connections from any IP, so no firewall
+setup is needed on the sensor PC.

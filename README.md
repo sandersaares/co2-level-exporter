@@ -25,6 +25,8 @@ USB CO2 sensor  ──►  co2-level-exporter (this app)  ──►  Azure SQL "
 | ----------------------------- | -------- | ------- | ---------------------------------------------- |
 | `CO2_SQL_CONNECTION_STRING`   | yes      | —       | Azure SQL connection string for the `co2_writer` user. Set by `deploy/deploy.ps1`. |
 | `CO2_SAMPLE_INTERVAL_SECONDS` | no       | `30`    | Seconds between readings.                      |
+| `CO2_LOG_DIRECTORY`           | no       | `%LOCALAPPDATA%\co2-level-exporter\logs` | Directory for daily-rolling log files. |
+| `CO2_LOG_RETENTION_DAYS`      | no       | `30`    | Days of log files to keep (pruned at startup; `0` keeps all). |
 
 No secrets are stored in the repo; the connection string comes from Key Vault via the deploy
 script (see below).
@@ -57,7 +59,31 @@ See [development.md](development.md) for prerequisites and the build/run workflo
 
 ## Always-on operation
 
-Run the app under a supervisor that restarts it on exit (it exits on device fault by design),
-e.g. a Windows Scheduled Task set to "run whether user is logged on or not" and "restart on
-failure", or a service wrapper. The SQL server accepts connections from any IP, so no firewall
-setup is needed on the sensor PC.
+Install the logger as a background Windows Scheduled Task:
+
+```powershell
+# Run once from an elevated PowerShell to also enable Application event log entries.
+./deploy/install-scheduled-task.ps1 -Verbose
+```
+
+This publishes the app to `%LOCALAPPDATA%\Programs\co2-level-exporter` and registers a task that
+starts at log on, runs hidden as the current user, restarts automatically if the process exits
+(it exits on device fault by design), and is re-launched by a watchdog if it stops. The task
+inherits `CO2_SQL_CONNECTION_STRING` from the user environment. Remove it with
+`./deploy/install-scheduled-task.ps1 -Uninstall`.
+
+The SQL server accepts connections from any IP, so no firewall setup is needed on the sensor PC.
+
+### Logging
+
+The app writes timestamped lines to a daily-rolling file under
+`%LOCALAPPDATA%\co2-level-exporter\logs` (and to the console when run from a terminal). When the
+installer is run elevated once, it also registers an Application event log source named
+`co2-level-exporter`, after which warnings and errors surface in Event Viewer. Tail today's file:
+
+```powershell
+Get-Content (Join-Path $env:LOCALAPPDATA "co2-level-exporter\logs\co2-level-exporter-$(Get-Date -Format yyyyMMdd).log") -Wait -Tail 20
+```
+
+> The most reliable failure signal is the data itself: a Grafana "no data" / stale-data alert on
+> `co2.readings` catches the sensor PC being off or the logger being stuck, regardless of logs.

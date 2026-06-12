@@ -4,10 +4,12 @@ namespace co2_level_exporter
     {
         public static async Task<int> Main()
         {
+            var logger = new Logger();
+
             var connectionString = Environment.GetEnvironmentVariable("CO2_SQL_CONNECTION_STRING");
             if (string.IsNullOrWhiteSpace(connectionString))
             {
-                Console.Error.WriteLine("CO2_SQL_CONNECTION_STRING environment variable is not set.");
+                logger.Error("CO2_SQL_CONNECTION_STRING environment variable is not set.");
                 return 1;
             }
 
@@ -27,13 +29,16 @@ namespace co2_level_exporter
             }
             catch (Exception ex)
             {
-                Console.Error.WriteLine($"Failed to open the CO2 sensor device: {ex.Message}");
+                logger.Error($"Failed to open the CO2 sensor device: {ex.Message}");
                 return 1;
             }
 
             var store = new ReadingStore(connectionString);
 
-            Console.WriteLine($"Logging CO2 readings to SQL every {interval.TotalSeconds:0} s. Press Ctrl+C to stop.");
+            logger.Info(
+                $"Started. Sampling every {interval.TotalSeconds:0} s. Logs: {logger.Directory}. " +
+                $"Event log: {(logger.EventLogEnabled ? "enabled" : "disabled")}.",
+                toEventLog: true);
 
             while (!cts.IsCancellationRequested)
             {
@@ -45,15 +50,15 @@ namespace co2_level_exporter
                 catch (Exception ex)
                 {
                     // A zero/failed reading indicates the device may be malfunctioning. Exit so the
-                    // host (scheduled task / service) restarts the process and re-initializes the device.
-                    Console.Error.WriteLine(ex.Message);
+                    // host (scheduled task) restarts the process and re-initializes the device.
+                    logger.Error($"Device read failed; exiting for supervisor restart: {ex.Message}");
                     return 2;
                 }
 
                 try
                 {
                     await store.SaveAsync(reading, cts.Token);
-                    Console.WriteLine($"{reading.Timestamp:u}  {reading.Volts,7:0.000} V  {reading.Ppm,5} ppm");
+                    logger.Info($"{reading.Volts,7:0.000} V  {reading.Ppm,5} ppm");
                 }
                 catch (OperationCanceledException)
                 {
@@ -63,7 +68,7 @@ namespace co2_level_exporter
                 {
                     // Persisting failed even after retries. Drop this reading and keep logging so a
                     // transient database outage does not terminate the process.
-                    Console.Error.WriteLine($"Failed to save reading: {ex.Message}");
+                    logger.Warning($"Failed to save reading: {ex.Message}");
                 }
 
                 try
@@ -76,7 +81,7 @@ namespace co2_level_exporter
                 }
             }
 
-            Console.WriteLine("Stopped.");
+            logger.Info("Stopped.", toEventLog: true);
             return 0;
         }
 
